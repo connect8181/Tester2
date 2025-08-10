@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bitcoin Backtesting Bot</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .header {
+            background: #333;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .parameters {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .param-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .param-item {
+            display: flex;
+            flex-direction: column;
+        }
+        .param-item label {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .param-item input, .param-item select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .results {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .metric-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .metric-card h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .metric-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .trades-table {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .equity-chart {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f8f9fa;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button.stop {
+            background: #dc3545;
+        }
+        button.stop:hover {
+            background: #c82333;
+        }
+        .positive { color: #28a745; }
+        .negative { color: #dc3545; }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .running { background-color: #28a745; }
+        .stopped { background-color: #dc3545; }
+        .chart-container {
+            width: 100%;
+            height: 400px;
+            position: relative;
+        }
+        #equity-canvas {
+            width: 100%;
+            height: 100%;
+            border: 1px solid #ddd;
+        }
+        .logs-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .log-window {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            height: 300px;
+            overflow-y: auto;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        .log-content {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Bitcoin Backtesting Bot</h1>
+            <p>Historical performance analysis and strategy optimization</p>
+        </div>
+
+        <div class="controls">
+            <h3>Backtest Controls</h3>
+            <div style="margin-bottom: 15px;">
+                <label style="display: inline-block; width: 100px;">Start Date:</label>
+                <input type="date" id="start-date" placeholder="Leave empty to use period">
+
+                <label style="display: inline-block; width: 100px; margin-left: 20px;">End Date:</label>
+                <input type="date" id="end-date" placeholder="Leave empty to use period">
+
+                <button type="button" onclick="setDefaultDates()" style="margin-left: 15px; background: #6c757d; padding: 5px 10px;">Set Default (60d)</button>
+                <button type="button" onclick="clearDates()" style="margin-left: 5px; background: #dc3545; padding: 5px 10px;">Clear Dates</button>
+            </div>
+            <button onclick="startBacktest()">Start Backtest</button>
+            <button onclick="stopBacktest()" class="stop">Stop Backtest</button>
+            <button onclick="resetBacktest()" style="background: #6c757d;">Reset</button>
+            <button onclick="goToLiveTrading()" style="background: #28a745; margin-left: 20px;">🚀 Go to Live Trading</button>
+            <span id="backtest-status">
+                <span class="status-indicator stopped"></span>Ready
+            </span>
+
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+                <h4>Settings Management</h4>
+                <input type="text" id="bt-settings-filename" placeholder="Settings name (optional)" style="margin-right: 10px; padding: 8px;">
+                <button onclick="saveBacktestSettings()" style="background: #28a745;">Save Settings</button>
+                <button onclick="loadBacktestSettingsDialog()" style="background: #17a2b8;">Load Settings</button>
+            </div>
+
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+                <h4>Project Export</h4>
+                <input type="text" id="zip-filename" placeholder="Enter ZIP filename (optional)" style="margin-right: 10px; padding: 8px;">
+                <button onclick="downloadProjectZip()" style="background: #6f42c1;">📦 Download Project ZIP</button>
+            </div>
+        </div>
+
+        <div class="parameters">
+            <h3>Backtest Parameters</h3>
+            <div class="param-grid">
+                <div class="param-item">
+                    <label>Symbol:</label>
+                    <input type="text" id="bt-symbol" value="BTC-USD">
+                </div>
+                <div class="param-item">
+                    <label>Timeframe:</label>
+                    <select id="bt-interval">
+                        <option value="1m">1 Minute</option>
+                        <option value="5m" selected>5 Minutes</option>
+                        <option value="15m">15 Minutes</option>
+                        <option value="1h">1 Hour</option>
+                        <option value="1d">1 Day</option>
+                    </select>
+                </div>
+                <div class="param-item">
+                    <label>Model Type:</label>
+                    <select id="bt-model-type">
+                        <option value="HistGradientBoosting">Hist Gradient Boosting</option>
+                        <option value="RandomForest">Random Forest</option>
+                    </select>
+                </div>
+                <div class="param-item">
+                    <label>Training Period:</label>
+                    <select id="bt-training-period">
+                        <option value="30d">30 Days</option>
+                        <option value="60d" selected>60 Days</option>
+                        <option value="90d">90 Days</option>
+                        <option value="180d">180 Days</option>
+                        <option value="365d">1 Year</option>
+                    </select>
+                </div>
+                <div class="param-item">
+                    <label>Backtest Period:</label>
+                    <select id="bt-backtest-period">
+                        <option value="7d">7 Days</option>
+                        <option value="14d">14 Days</option>
+                        <option value="30d" selected>30 Days</option>
+                        <option value="60d">60 Days</option>
+                        <option value="90d">90 Days</option>
+                    </select>
+                </div>
+                <div class="param-item">
+                    <label>Start Capital:</label>
+                    <input type="number" id="bt-start-capital" value="10000" step="100">
+                </div>
+                <div class="param-item">
+                    <label>Maker Fee Rate:</label>
+                    <input type="number" id="bt-maker-fee-rate" value="0.0004" step="0.0001">
+                </div>
+                <div class="param-item">
+                    <label>Taker Fee Rate:</label>
+                    <input type="number" id="bt-taker-fee-rate" value="0.0006" step="0.0001">
+                </div>
+                <div class="param-item">
+                    <label>Stop Loss %:</label>
+                    <input type="number" id="bt-stop-loss-pct" value="0.01" step="0.001">
+                </div>
+                <div class="param-item">
+                    <label>Take Profit %:</label>
+                    <input type="number" id="bt-take-profit-pct" value="0.008" step="0.001">
+                </div>
+                <div class="param-item">
+                    <label>Buy Probability Threshold:</label>
+                    <input type="number" id="bt-buy-prob-threshold" value="0.52" step="0.01" min="0" max="1">
+                </div>
+                <div class="param-item">
+                    <label>Confidence Threshold:</label>
+                    <input type="number" id="bt-confidence-threshold" value="0.55" step="0.01" min="0" max="1">
+                </div>
+                <div class="param-item">
+                    <label>Signal Exit Threshold:</label>
+                    <input type="number" id="bt-signal-exit-threshold" value="0.25" step="0.01" min="0" max="1">
+                </div>
+            </div>
+        </div>
+
+        <div class="results" id="results-section" style="display: none;">
+            <h3>Backtest Results</h3>
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <h4>Total Trades</h4>
+                    <div class="metric-value" id="total-trades-bt">0</div>
+                </div>
+                <div class="metric-card">
+                    <h4>Winners</h4>
+                    <div class="metric-value" id="winner-count">0</div>
+                </div>
+                <div class="metric-card">
+                    <h4>Winner Amount</h4>
+                    <div class="metric-value" id="winner-amount">$0</div>
+                </div>
+                <div class="metric-card">
+                    <h4>Losers</h4>
+                    <div class="metric-value" id="loser-count">0</div>
+                </div>
+                <div class="metric-card">
+                    <h4>Loser Amount</h4>
+                    <div class="metric-value" id="loser-amount">$0</div>
+                </div>
+                <div class="metric-card">
+                    <h4>Win/Loss Ratio</h4>
+                    <div class="metric-value" id="win-loss-ratio">0.0</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="equity-chart" id="chart-section" style="display: none;">
+            <h3>Equity Curve</h3>
+            <div class="chart-container">
+                <canvas id="equity-canvas"></canvas>
+            </div>
+        </div>
+
+        <div class="trades-table" id="trades-section" style="display: none;">
+            <h3>📊 Trade History - P&L With and Without Fees</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Entry Price</th>
+                        <th>Exit Price</th>
+                        <th>Exit Reason</th>
+                        <th>P&L (Raw)</th>
+                        <th>P&L (Including Fees)</th>
+                        <th>Confidence</th>
+                        <th>Fees</th>
+                    </tr>
+                </thead>
+                <tbody id="backtest-trades-body">
+                    <tr>
+                        <td colspan="7">No backtest run yet</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="logs-section">
+            <h3>📋 Backtest Logs</h3>
+            <div class="log-window" id="log-window">
+                <div class="log-content" id="log-content">
+                    Ready to start backtest...
+                </div>
+            </div>
+            <button onclick="clearLogs()" style="margin-top: 10px; background: #6c757d;">Clear Logs</button>
+        </div>
+    </div>
+
+    <script>
+        let backtestRunning = false;
+
+        function setDefaultDates() {
+            const today = new Date();
+            const sixtyDaysAgo = new Date(today);
+            sixtyDaysAgo.setDate(today.getDate() - 60);
+
+            document.getElementById('start-date').value = sixtyDaysAgo.toISOString().split('T')[0];
+            document.getElementById('end-date').value = today.toISOString().split('T')[0];
+        }
+
+        function clearDates() {
+            document.getElementById('start-date').value = '';
+            document.getElementById('end-date').value = '';
+        }
+
+        function getBacktestParams() {
+            return {
+                SYMBOL: document.getElementById('bt-symbol').value,
+                INTERVAL: document.getElementById('bt-interval').value,
+                MODEL_TYPE: document.getElementById('bt-model-type').value,
+                TRAINING_PERIOD: document.getElementById('bt-training-period').value,
+                BACKTEST_PERIOD: document.getElementById('bt-backtest-period').value,
+                START_CAPITAL: parseFloat(document.getElementById('bt-start-capital').value),
+                MAKER_FEE_RATE: parseFloat(document.getElementById('bt-maker-fee-rate').value),
+                TAKER_FEE_RATE: parseFloat(document.getElementById('bt-taker-fee-rate').value),
+                STOP_LOSS_PCT: parseFloat(document.getElementById('bt-stop-loss-pct').value),
+                TAKE_PROFIT_PCT: parseFloat(document.getElementById('bt-take-profit-pct').value),
+                BUY_PROB_THRESHOLD: parseFloat(document.getElementById('bt-buy-prob-threshold').value),
+                CONFIDENCE_THRESHOLD: parseFloat(document.getElementById('bt-confidence-threshold').value),
+                SIGNAL_EXIT_THRESHOLD: parseFloat(document.getElementById('bt-signal-exit-threshold').value, 10),
+                FUTURE_WINDOW: 24,
+                USE_OVERSAMPLING: true,
+                TEST_SIZE: 0.3
+            };
+        }
+
+        function startBacktest() {
+            if (backtestRunning) return;
+
+            const params = getBacktestParams();
+            const startDate = document.getElementById('start-date').value;
+            const endDate = document.getElementById('end-date').value;
+
+            backtestRunning = true;
+            updateBacktestStatus();
+
+            fetch('/start_backtest', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    params: params,
+                    start_date: startDate,
+                    end_date: endDate
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log(data.status);
+            });
+        }
+
+        function stopBacktest() {
+            fetch('/stop_backtest', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    console.log(data.status);
+                    backtestRunning = false;
+                    updateBacktestStatus();
+                });
+        }
+
+        function updateBacktestStatus() {
+            const statusElement = document.getElementById('backtest-status');
+            if (backtestRunning) {
+                statusElement.innerHTML = '<span class="status-indicator running"></span>Running...';
+            } else {
+                statusElement.innerHTML = '<span class="status-indicator stopped"></span>Ready';
+            }
+        }
+
+        function updateResults() {
+            fetch('/backtest_results')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.running !== backtestRunning) {
+                        backtestRunning = data.running;
+                        updateBacktestStatus();
+                    }
+
+                    if (data.metrics && Object.keys(data.metrics).length > 0) {
+                        document.getElementById('results-section').style.display = 'block';
+                        document.getElementById('total-trades-bt').textContent = data.metrics.total_trades || 0;
+                        document.getElementById('winner-count').textContent = data.metrics.winner_count || 0;
+                        document.getElementById('winner-amount').textContent = '$' + (data.metrics.winner_amount || 0).toFixed(2);
+                        document.getElementById('loser-count').textContent = data.metrics.loser_count || 0;
+                        document.getElementById('loser-amount').textContent = '$' + (data.metrics.loser_amount || 0).toFixed(2);
+                        document.getElementById('win-loss-ratio').textContent = (data.metrics.win_loss_ratio || 0).toFixed(2);
+                    }
+
+                    if (data.trades && data.trades.length > 0) {
+                        document.getElementById('trades-section').style.display = 'block';
+                        const tbody = document.getElementById('backtest-trades-body');
+                        tbody.innerHTML = data.trades.slice(-20).map(trade => `
+                            <tr>
+                                <td>${new Date(trade.timestamp).toLocaleString()}</td>
+                                <td>$${trade.entry_price.toFixed(2)}</td>
+                                <td>$${trade.exit_price.toFixed(2)}</td>
+                                <td>${trade.exit_reason}</td>
+                                <td class="${trade.raw_pnl >= 0 ? 'positive' : 'negative'}">$${trade.raw_pnl.toFixed(2)}</td>
+                                <td class="${trade.pnl >= 0 ? 'positive' : 'negative'}">$${trade.pnl.toFixed(2)}</td>
+                                <td>${(trade.confidence * 100).toFixed(1)}%</td>
+                                <td>$${trade.fees.toFixed(2)}</td>
+                            </tr>
+                        `).join('');
+                    }
+
+                    if (data.equity_curve && data.equity_curve.length > 0) {
+                        document.getElementById('chart-section').style.display = 'block';
+                        drawEquityCurve(data.equity_curve);
+                    }
+                });
+        }
+
+        function drawEquityCurve(equityData) {
+            const canvas = document.getElementById('equity-canvas');
+            const ctx = canvas.getContext('2d');
+
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+
+            if (equityData.length < 2) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const equityValues = equityData.map(d => d.equity);
+            const minEquity = Math.min(...equityValues);
+            const maxEquity = Math.max(...equityValues);
+            const range = maxEquity - minEquity || 1;
+
+            // Draw axes
+            ctx.strokeStyle = '#ddd';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(50, canvas.height - 30);
+            ctx.lineTo(canvas.width - 20, canvas.height - 30);
+            ctx.moveTo(50, 20);
+            ctx.lineTo(50, canvas.height - 30);
+            ctx.stroke();
+
+            // Draw equity curve
+            ctx.strokeStyle = '#007bff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            for (let i = 0; i < equityData.length; i++) {
+                const x = 50 + (i / (equityData.length - 1)) * (canvas.width - 70);
+                const y = canvas.height - 30 - ((equityData[i].equity - minEquity) / range) * (canvas.height - 50);
+
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.stroke();
+
+            // Add labels
+            ctx.fillStyle = '#333';
+            ctx.font = '12px Arial';
+            ctx.fillText('$' + minEquity.toFixed(0), 5, canvas.height - 30);
+            ctx.fillText('$' + maxEquity.toFixed(0), 5, 25);
+        }
+
+        function updateLogs() {
+            fetch('/backtest_logs')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.logs && data.logs.length > 0) {
+                        const logContent = document.getElementById('log-content');
+                        logContent.textContent = data.logs.join('\n');
+
+                        const logWindow = document.getElementById('log-window');
+                        logWindow.scrollTop = logWindow.scrollHeight;
+                    }
+                });
+        }
+
+        function clearLogs() {
+            const logContent = document.getElementById('log-content');
+            logContent.textContent = 'Logs cleared...';
+        }
+
+        function resetBacktest() {
+            if (backtestRunning) {
+                stopBacktest();
+            }
+
+            // Reset form values
+            document.getElementById('bt-symbol').value = 'BTC-USD';
+            document.getElementById('bt-interval').value = '5m';
+            document.getElementById('bt-model-type').value = 'HistGradientBoosting';
+            document.getElementById('bt-training-period').value = '60d';
+            document.getElementById('bt-backtest-period').value = '30d';
+            document.getElementById('bt-start-capital').value = '10000';
+            document.getElementById('bt-maker-fee-rate').value = '0.0004';
+            document.getElementById('bt-taker-fee-rate').value = '0.0006';
+            document.getElementById('bt-stop-loss-pct').value = '0.01';
+            document.getElementById('bt-take-profit-pct').value = '0.008';
+            document.getElementById('bt-buy-prob-threshold').value = '0.52';
+            document.getElementById('bt-confidence-threshold').value = '0.55';
+            document.getElementById('bt-signal-exit-threshold').value = '0.25';
+
+            clearDates();
+
+            // Hide results
+            document.getElementById('results-section').style.display = 'none';
+            document.getElementById('chart-section').style.display = 'none';
+            document.getElementById('trades-section').style.display = 'none';
+
+            // Clear tables
+            const tbody = document.getElementById('backtest-trades-body');
+            tbody.innerHTML = '<tr><td colspan="7">No backtest run yet</td></tr>';
+
+            // Clear metrics
+            document.getElementById('total-trades-bt').textContent = '0';
+            document.getElementById('winner-count').textContent = '0';
+            document.getElementById('winner-amount').textContent = '$0';
+            document.getElementById('loser-count').textContent = '0';
+            document.getElementById('loser-amount').textContent = '$0';
+            document.getElementById('win-loss-ratio').textContent = '0.0';
+
+            clearLogs();
+
+            backtestRunning = false;
+            updateBacktestStatus();
+
+            fetch('/reset_backtest', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Backtest reset:', data.status);
+                });
+        }
+
+        function saveBacktestSettings() {
+            const filename = document.getElementById('bt-settings-filename').value.trim();
+            const params = getBacktestParams();
+
+            fetch('/save_backtest_settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    filename: filename || null,
+                    params: params
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('Settings saved successfully!\nFile: ' + data.filepath);
+                    document.getElementById('bt-settings-filename').value = '';
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            });
+        }
+
+        function loadBacktestSettingsDialog() {
+            fetch('/list_settings')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.settings && data.settings.length > 0) {
+                        let options = data.settings.map((setting, index) => 
+                            `${index + 1}. ${setting.name} (${setting.symbol}, ${setting.model_type})`
+                        ).join('\n');
+
+                        let choice = prompt(`Available Settings:\n\n${options}\n\nEnter the number of settings to load (1-${data.settings.length}):`);
+
+                        if (choice) {
+                            let index = parseInt(choice) - 1;
+                            if (index >= 0 && index < data.settings.length) {
+                                loadBacktestSettings(data.settings[index].filepath);
+                            } else {
+                                alert('Invalid selection');
+                            }
+                        }
+                    } else {
+                        alert('No saved settings found');
+                    }
+                });
+        }
+
+        function loadBacktestSettings(filepath) {
+            fetch('/load_settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ filepath: filepath })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const settings = data.settings;
+
+                    document.getElementById('bt-symbol').value = settings.SYMBOL || 'BTC-USD';
+                    document.getElementById('bt-interval').value = settings.INTERVAL || '5m';
+                    document.getElementById('bt-model-type').value = settings.MODEL_TYPE || 'HistGradientBoosting';
+                    document.getElementById('bt-training-period').value = settings.TRAINING_PERIOD || '60d';
+                    document.getElementById('bt-backtest-period').value = settings.BACKTEST_PERIOD || '30d';
+                    document.getElementById('bt-start-capital').value = settings.START_CAPITAL || 10000;
+                    document.getElementById('bt-maker-fee-rate').value = settings.MAKER_FEE_RATE || 0.0004;
+                    document.getElementById('bt-taker-fee-rate').value = settings.TAKER_FEE_RATE || 0.0006;
+                    document.getElementById('bt-stop-loss-pct').value = settings.STOP_LOSS_PCT || 0.01;
+                    document.getElementById('bt-take-profit-pct').value = settings.TAKE_PROFIT_PCT || 0.008;
+                    document.getElementById('bt-buy-prob-threshold').value = settings.BUY_PROB_THRESHOLD || 0.52;
+                    document.getElementById('bt-confidence-threshold').value = settings.CONFIDENCE_THRESHOLD || 0.55;
+                    document.getElementById('bt-signal-exit-threshold').value = settings.SIGNAL_EXIT_THRESHOLD || 0.25;
+
+                    alert('Settings loaded successfully!');
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            });
+        }
+
+        function downloadProjectZip() {
+            const filename = document.getElementById('zip-filename').value.trim();
+            
+            // Show loading message
+            const originalButton = event.target;
+            originalButton.textContent = '📦 Creating ZIP...';
+            originalButton.disabled = true;
+            
+            fetch('/create_project_zip', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    filename: filename || null
+                })
+            })
+            .then(response => {
+                if (response.ok) {
+                    const contentDisposition = response.headers.get('Content-Disposition');
+                    let downloadFilename = filename || 'bitcoin_trading_bot_project.zip';
+                    
+                    if (contentDisposition) {
+                        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                        if (filenameMatch && filenameMatch[1]) {
+                            downloadFilename = filenameMatch[1].replace(/['"]/g, '');
+                        }
+                    }
+                    
+                    return response.blob().then(blob => ({ blob, filename: downloadFilename }));
+                } else {
+                    return response.json().then(data => {
+                        throw new Error(data.message || 'Failed to create ZIP');
+                    });
+                }
+            })
+            .then(({ blob, filename: downloadFilename }) => {
+                if (blob.size === 0) {
+                    throw new Error('ZIP file is empty - no files were found to zip');
+                }
+                
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = downloadFilename;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                // Clear the filename input
+                document.getElementById('zip-filename').value = '';
+                
+                // Show success message with file size
+                const sizeKB = (blob.size / 1024).toFixed(2);
+                alert(`Project ZIP downloaded successfully!\nFile: ${downloadFilename}\nSize: ${sizeKB} KB`);
+            })
+            .catch(error => {
+                console.error('ZIP download error:', error);
+                alert('Error creating ZIP: ' + error.message);
+            })
+            .finally(() => {
+                // Restore button
+                originalButton.textContent = '📦 Download Project ZIP';
+                originalButton.disabled = false;
+            });
+        }
+
+        function goToLiveTrading() {
+            window.location.href = '/';
+        }
+
+        // Update results and logs
+        setInterval(updateResults, 2000);
+        setInterval(updateLogs, 1000);
+        updateResults();
+        updateLogs();
+    </script>
+</body>
+</html>
